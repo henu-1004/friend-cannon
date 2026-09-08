@@ -80,7 +80,7 @@ export class SlapstickFX {
     }
     this.starLife = Math.max(0, this.starLife - dt);
     for (let i = 0; i < 5; i++) {
-      const a = time * 6 + i * Math.PI * 2 / this.starCount, j = i * 4;
+      const a = time * 6 + i * Math.PI * 2 / Math.max(1, this.starCount), j = i * 4;
       this.starData[j] = head.x + Math.cos(a) * 1.2;
       this.starData[j + 1] = head.y + 1 + Math.sin(a * 2) * 0.2;
       this.starData[j + 2] = head.z + Math.sin(a) * 0.7 + 0.2;

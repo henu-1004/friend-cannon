@@ -1,3 +1,13 @@
 node_modules/
 dist/
-artifacts/
+artifacts/*
+
+# Keep the requested vertical-slice handoff and final proof; ignore temporary captures.
+!artifacts/astra-vertical-slice.md
+!artifacts/astra/
+artifacts/astra/*
+!artifacts/astra/final-*.png
+!artifacts/astra/final-12-worst-clip.webm
+!artifacts/astra/final-qa.json
+!artifacts/astra/measurements.json
+!artifacts/astra/index.html

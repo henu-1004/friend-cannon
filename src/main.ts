@@ -19,11 +19,11 @@ $("app").innerHTML = `<div id="scene"></div>
   <div class="badge" id="badge">100%<strong>FRIEND</strong>POWERED</div>
   <div class="bottom">
     <div class="panel" id="launch"><div class="panel-title">1. AIM FOR QUESTIONABLE SCIENCE <span class="dot">●</span></div><label class="slider-row">ANGLE<input id="angle" type="range" min="15" max="75" value="36"><span id="angleValue">36°</span></label><label class="slider-row">POWER<input id="power" type="range" min="35" max="100" value="76"><span id="powerValue">76%</span></label><button class="fire" id="fire">2. LAUNCH FRIEND <small>SPACE ↗</small></button><details class="face-details"><summary>Give your friend a face <span>optional</span></summary><div class="face-picker-label">FRIEND FACE <span id="face-status" role="status">None · cartoon</span></div><div class="face-picker" id="face-picker" role="group" aria-label="Optional face presets"></div><button class="face" id="face">＋ Upload your own photo</button><input id="file" type="file" accept="image/*"></details></div>
-    <div class="panel flight" id="flight"><div class="panel-title"><span id="agency">3. FLAIL INTO TROUBLE</span><span id="speed">0 km/h</span></div><div class="flight-actions"><button id="liftTouch" class="maneuver"><kbd>Q</kbd><strong>FLAIL UP</strong><small>Lift + brake</small></button><button id="flailTouch" class="maneuver"><kbd>E</kbd><strong>DIVE</strong><small>Down + forward</small></button><button id="boostTouch" class="boost-button"><kbd>F</kbd><strong>FART BOOST</strong><small id="fuel">5 left</small></button></div><div class="boosts" id="boosts" aria-label="Boost fuel"></div><div class="flight-footer"><span>3 prop hits = +1 puff</span><button id="reset">↻ Retry <kbd>R</kbd></button></div></div>
+    <div class="panel flight" id="flight"><div class="panel-title"><span id="agency">3. FLAIL INTO TROUBLE</span><span id="speed">0 km/h</span></div><div class="flight-actions"><button id="liftTouch" class="maneuver"><kbd>Q</kbd><strong>FLAIL UP</strong><small>Lift + brake</small></button><button id="flailTouch" class="maneuver"><kbd>E</kbd><strong>DIVE</strong><small>Down + forward</small></button><button id="boostTouch" class="boost-button"><kbd>F</kbd><strong>FART BOOST</strong><small id="fuel">5 left</small></button></div><div class="boosts" id="boosts" aria-label="Boost fuel"></div><div class="flight-footer"><span>3 prop hits = +1 puff</span><button id="reaim" class="reaim-link">Change aim</button><button id="reset">↻ Retry <kbd>R</kbd></button></div></div>
     <div class="side-hints"><div class="hint" id="hint">YOUR FRIEND HAS SIGNED THE WAIVER. PROBABLY.</div><div class="controls"><span><kbd>A</kbd><kbd>D</kbd> Angle</span><span><kbd>W</kbd><kbd>S</kbd> Power</span><span><kbd>SPACE</kbd> Fire</span></div><div class="credit" id="recordHint">A LITTLE PHYSICS. A LOT OF POOR DECISIONS.</div></div>
   </div>
 </div>
-<div class="end" id="end" role="dialog" aria-modal="true" aria-labelledby="reportTitle"><div class="end-card"><div class="eyebrow" id="reportEyebrow">FLIGHT REPORT / FRIEND INTACT</div><h2 id="reportTitle">BEAUTIFUL MESS.</h2><p id="verdict"></p><div class="end-stats" id="results"></div><div class="worst-moment"><img id="worstPhoto" alt="Your friend's worst impact this flight"><div><small>WORST HIT</small><strong id="worstLabel">Soft landing. Suspicious.</strong></div></div><p id="challenge"></p><div class="report-actions"><button id="replay">▶ Watch worst 8s</button><button id="savePhoto">↓ Save disaster</button></div><button class="fire" id="retry">ONE MORE DISASTER <small>R / SPACE ↻</small></button><p id="best"></p></div></div>
+<div class="end" id="end" role="dialog" aria-modal="true" aria-labelledby="reportTitle"><div class="end-card"><div class="eyebrow" id="reportEyebrow">FLIGHT REPORT / FRIEND INTACT</div><h2 id="reportTitle">BEAUTIFUL MESS.</h2><p id="verdict"></p><div class="end-stats" id="results"></div><div class="worst-moment"><img id="worstPhoto" alt="Your friend's worst impact this flight"><div><small>WORST HIT</small><strong id="worstLabel">Soft landing. Suspicious.</strong></div></div><p id="challenge"></p><div class="report-actions"><button id="replay">▶ Watch worst 8s</button><button id="savePhoto">↓ Save card</button><button id="saveClip">↓ Save clip</button></div><button class="fire" id="retry">ONE MORE DISASTER <small>R / SPACE ↻</small></button><p id="best"></p><button id="reaimEnd" class="reaim-link">Change aim / face</button></div></div>
 <div id="replayBar"><span>DISASTER REPLAY <b id="replayTime"></b></span><button id="closeReplay">Back to report <kbd>ESC</kbd></button></div>
 `;
 
@@ -464,6 +464,15 @@ for (const side of [-1, 1]) {
   joint(torso, l, new C.Vec3(side * 0.32, -0.5, 0), new C.Vec3(0, 0.35, 0));
 }
 
+const contactShadow = new THREE.Mesh(new THREE.CircleGeometry(1, 24), new THREE.MeshBasicMaterial({ color: "#345a46", transparent: true, opacity: 0.16, depthWrite: false }));
+contactShadow.rotation.x = -Math.PI / 2;
+scene.add(contactShadow);
+function updateContactShadow(x: number, y: number, z: number) {
+  contactShadow.position.set(x, 0.1, z);
+  const size = 0.9 + Math.min(25, y) * 0.04;
+  contactShadow.scale.set(size, size * 0.7, 1);
+  contactShadow.material.opacity = 0.2 / (1 + y * 0.12);
+}
 type Prop = {
   body: C.Body;
   group: THREE.Group;
@@ -730,24 +739,27 @@ let state: "aim" | "fly" | "end" | "replay" = "aim",
   squashAxis = new THREE.Vector3(0, 1, 0),
   trembleT = 0,
   worstHitSpeed = 0,
+  worstSeverity = 0,
   worstHitLabel = "—",
   impactAge = 0,
   maxStreak = 0;
 type ContactBeat = { impact: number; normal: C.Vec3; headFirst: boolean };
-const pendingHits = new Map<Prop, ContactBeat>();
 let pendingGround: ContactBeat | null = null;
 const eventLog: { time: number; label: string; impact: number; score: number }[] = [];
 const fx = new SlapstickFX(scene);
-const floatTexts: { mesh: THREE.Sprite; life: number; v: THREE.Vector3 }[] = [];
+const floatTexts: { mesh: THREE.Sprite; life: number; v: THREE.Vector3; followHead?: boolean }[] = [];
 const chainWords: string[] = [];
 const keys = new Set<string>();
 let boostsUsed = 0;
+let audioBus: GainNode | undefined;
 let audioCtx: AudioContext | undefined,
   muted = false;
 function sound(freq = 200, duration = 0.13) {
+  if (state === "fly") lastSound = { serial: lastSound.serial + 1, frequency: freq, duration };
   if (muted) return;
   try {
     audioCtx ??= new AudioContext();
+    if (!audioBus) { audioBus = audioCtx.createGain(); audioBus.connect(audioCtx.destination); }
     void audioCtx.resume();
     const o = audioCtx.createOscillator(),
       g = audioCtx.createGain();
@@ -760,9 +772,10 @@ function sound(freq = 200, duration = 0.13) {
     g.gain.setValueAtTime(0.13, audioCtx.currentTime);
     g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
     o.connect(g);
-    g.connect(audioCtx.destination);
+    g.connect(audioBus);
     o.start();
     o.stop(audioCtx.currentTime + duration);
+    o.onended = () => { o.disconnect(); g.disconnect(); };
   } catch {}
 }
 function burst(pos: C.Vec3 | THREE.Vector3, color: string, count = 12, force = 7) {
@@ -788,7 +801,7 @@ function makeTextSprite(text: string, color = "#2b3d38") {
     textTextures.set(key, texture);
   }
   const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false, toneMapped: false }));
-  spr.scale.set(4.8, 1.2, 1);
+  spr.scale.set(innerWidth < 761 ? 2.8 : 4.8, innerWidth < 761 ? 0.7 : 1.2, 1);
   scene.add(spr);
   return spr;
 }
@@ -814,18 +827,21 @@ function bumpChaos(base: number, label: string) {
     hud.textContent = chaosMult > 1 ? `CHAOS STREAK ×${chaosMult}` : "FIRST BONK! ×1";
   return gained;
 }
-function comedyImpact(impact: number, label: string, normal = new C.Vec3(0, 1, 0)) {
+function comedyImpact(impact: number, label: string, normal = new C.Vec3(0, 1, 0), softness = 1) {
+  const severity = impact * softness;
   // Record the true normal impact speed even when secondary contacts share a reaction.
-  if (impact > worstHitSpeed) {
+  if (severity > worstSeverity) {
+    worstSeverity = severity;
     worstHitSpeed = impact;
     worstHitLabel = `${Math.round(impact * 3.6)} km/h · ${label}`;
+    markWorstMoment();
   }
   if (elapsed - lastReaction < 0.24 || impact < 2) return;
   lastReaction = elapsed;
   impactAge = 0;
   squashAxis.set(Math.abs(normal.x), Math.abs(normal.y), 0);
-  impactCam = impact >= 10 ? 1.05 : 0.5;
-  const tier = impact < 5 ? 0 : impact < 10 ? 1 : impact < 18 ? 2 : 3;
+  impactCam = severity >= 10 ? 1.05 : 0.5;
+  const tier = severity < 5 ? 0 : severity < 10 ? 1 : severity < 18 ? 2 : 3;
   shake = [0.04, 0.1, 0.22, 0.34][tier];
   squashAmt = [0.94, 0.82, 0.68, 0.54][tier];
   squashT = 0.28;
@@ -837,9 +853,9 @@ function comedyImpact(impact: number, label: string, normal = new C.Vec3(0, 1, 0
     trembleT = tier === 3 ? 0.4 : 0;
     const spr = makeTextSprite(tier === 3 ? "KABONK!" : "WHAP!", "#e56746");
     spr.position.set(head.body.position.x, head.body.position.y + 2.2, head.body.position.z + 0.8);
-    floatTexts.push({ mesh: spr, life: 0.85, v: new THREE.Vector3(torso.body.velocity.x * 0.6, 1, 0) });
+    floatTexts.push({ mesh: spr, life: 0.85, v: new THREE.Vector3(torso.body.velocity.x * 0.6, 1, 0), followHead: true });
   }
-  // One onset per collision; the descending pitch is the squash, the chirp the recovery.
+  // One onset per collision; the descending pitch lands with the squash.
   sound([460, 310, 180, 95][tier], [0.07, 0.11, 0.15, 0.2][tier]);
 }
 function toast(t: string) {
@@ -871,7 +887,7 @@ function hit(p: Prop, impact = 5, normal = new C.Vec3(0, 1, 0), headFirst = fals
   const base = (type === "GLASS" ? 150 : type === "BOOM" ? 220 : type === "CAR" ? 120 : 90) + (headBonus ? 80 : 0);
   const word = headBonus ? "HEADBUTT!" : callouts[type][(p.hits + runNumber) % 2];
   bumpChaos(base, word);
-  comedyImpact(impact, headFirst ? `Head-first into ${type.toLowerCase()}` : type, normal);
+  comedyImpact(impact, headFirst ? `Head-first into ${type.toLowerCase()}` : type, normal, type === "BALLOON" ? 0.22 : type === "TRAMPOLINE" || type === "SPRING" ? 0.5 : 1);
   eventLog.push({ time: elapsed, label: type + (headBonus ? " · HEADBUTT" : ""), impact, score: chaos });
   burst(b.position, type === "BOOM" ? "#f5b14f" : type === "GLASS" ? "#b9f4f3" : "#fff3b8", type === "BOOM" ? 16 : 6, 6);
   // Each prop has its own rhythm. Breakables preserve forward motion; landing
@@ -926,11 +942,9 @@ for (const part of parts) part.body.addEventListener("collide", (event: { body: 
     pendingGround = { impact, normal: event.contact.ni.clone(), headFirst: part === head };
 });
 function resolveContacts() {
-  for (const [prop, beat] of pendingHits) hit(prop, beat.impact, beat.normal, beat.headFirst);
-  pendingHits.clear();
   const beat = pendingGround;
   pendingGround = null;
-  if (beat && beat.impact > 3 && elapsed - lastGroundHit > 0.45) {
+  if (beat && beat.impact > 3 && elapsed - lastGroundHit > 0.45 && elapsed - lastReaction > 0.18) {
     lastGroundHit = elapsed;
     comedyImpact(beat.impact, beat.headFirst ? "Face-first into grass" : "LAWN DART", beat.normal);
     if (beat.impact > 8) bumpChaos(40, "LAWN DART");
@@ -1000,39 +1014,250 @@ function updateFuel() {
   ).join("");
   $("fuel").textContent = `${farts} left`;
 }
+type ReplayFrame = {
+  time: number; actors: Float32Array; props: Float32Array; view: Float32Array;
+  effects: EffectFrame; mood: FaceMood; score: number; distance: number; word: string;
+  sound: { serial: number; frequency: number; duration: number };
+  texts: { position: number[]; opacity: number; map: THREE.Texture | null }[];
+};
+let flightClock = 0, nextFrameAt = 0, highlightUntil = 0, photoDelay = -1;
+let replayClock = 0, replayIndex = 0, replaySound = -1;
+let lastSound = { serial: 0, frequency: 0, duration: 0 };
+let highlight: ReplayFrame[] = [];
+const history: ReplayFrame[] = [];
+const worstCanvas = document.createElement('canvas');
+worstCanvas.width = 640; worstCanvas.height = 360;
+const worstContext = worstCanvas.getContext('2d')!;
+let hasPhoto = false;
+const replayQ = new THREE.Quaternion();
+const replayTexts = Array.from({ length: 4 }, () => {
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, toneMapped: false }));
+  sprite.scale.set(innerWidth < 761 ? 2.8 : 4.8, innerWidth < 761 ? 0.7 : 1.2, 1); sprite.visible = false; scene.add(sprite); return sprite;
+});
+function rememberFrame() {
+  if (flightClock < nextFrameAt) return;
+  nextFrameAt = flightClock + 0.05;
+  const actors = new Float32Array(parts.length * 10);
+  parts.forEach((p, i) => {
+    const j = i * 10, m = p.mesh;
+    m.position.toArray(actors, j); m.quaternion.toArray(actors, j + 3); m.scale.toArray(actors, j + 7);
+  });
+  const propData = new Float32Array(props.length * 7);
+  props.forEach((p, i) => {
+    const j = i * 7, m = p.group;
+    m.position.toArray(propData, j); propData[j + 3] = m.scale.y; propData[j + 4] = m.rotation.z;
+    propData[j + 5] = Number(m.visible); propData[j + 6] = Number(p.caption.visible);
+  });
+  const frame: ReplayFrame = {
+    time: flightClock, actors, props: propData,
+    view: new Float32Array([...camera.position.toArray(), ...look.toArray()]), effects: fx.capture(),
+    mood: faceMood, score: chaos, distance, word: performance.now() < toastUntil ? $('toast').textContent || '' : '',
+    sound: lastSound,
+    texts: floatTexts.slice(-4).map(t => ({ position: t.mesh.position.toArray(), opacity: t.mesh.material.opacity, map: t.mesh.material.map })),
+  };
+  history.push(frame);
+  while (history.length && history[0].time < flightClock - 3) history.shift();
+  if (flightClock <= highlightUntil) highlight.push(frame);
+}
+function markWorstMoment() {
+  highlight = history.slice();
+  highlightUntil = flightClock + 5;
+  photoDelay = 0.12;
+}
+function captureWorstPhoto() {
+  const source = renderer.domElement;
+  // Match the landscape card without stretching portrait play.
+  const cropHeight = Math.min(source.height, source.width * 9 / 16);
+  worstContext.drawImage(source, 0, (source.height - cropHeight) * 0.42, source.width, cropHeight, 0, 0, 640, 360);
+  hasPhoto = true;
+}
+function playReplay() {
+  if (highlight.length < 2) return;
+  state = 'replay'; document.body.dataset.state = 'replay';
+  $('end').style.display = 'none';
+  replayClock = highlight[0].time; replayIndex = 0; replaySound = -1;
+  floatTexts.forEach(t => t.mesh.visible = false);
+  $('closeReplay').focus({ preventScroll: true });
+}
+function stopReplay(cancelled = false) {
+  finishClip(cancelled);
+  state = 'end'; document.body.dataset.state = 'end';
+  $('end').style.display = 'grid';
+  replayTexts.forEach(t => t.visible = false);
+  $('toast').style.opacity = '0';
+  $('chaos').textContent = chaos.toLocaleString();
+  $('distance').textContent = String(Math.floor(distance));
+  $('replay').focus({ preventScroll: true });
+}
+function tickReplay(dt: number) {
+  replayClock += dt;
+  while (replayIndex < highlight.length - 2 && highlight[replayIndex + 1].time <= replayClock) replayIndex++;
+  const frame = highlight[replayIndex], next = highlight[replayIndex + 1];
+  const alpha = THREE.MathUtils.clamp((replayClock - frame.time) / Math.max(0.001, next.time - frame.time), 0, 1);
+  const mix = (a: number, b: number) => a + (b - a) * alpha;
+  parts.forEach((p, i) => {
+    const j = i * 10, a = frame.actors, b = next.actors;
+    p.mesh.position.set(mix(a[j], b[j]), mix(a[j + 1], b[j + 1]), mix(a[j + 2], b[j + 2]));
+    p.mesh.quaternion.fromArray(a, j + 3).slerp(replayQ.fromArray(b, j + 3), alpha);
+    p.mesh.scale.set(mix(a[j + 7], b[j + 7]), mix(a[j + 8], b[j + 8]), mix(a[j + 9], b[j + 9]));
+  });
+  props.forEach((p, i) => {
+    const j = i * 7, a = frame.props;
+    p.group.position.fromArray(a, j); p.group.scale.y = a[j + 3]; p.group.rotation.z = a[j + 4];
+    p.group.visible = !!a[j + 5]; p.caption.visible = !!a[j + 6];
+  });
+  const a = frame.view, b = next.view;
+  camera.position.set(mix(a[0], b[0]), mix(a[1], b[1]), mix(a[2], b[2]));
+  look.set(mix(a[3], b[3]), mix(a[4], b[4]), mix(a[5], b[5]));
+  camera.lookAt(look);
+  for (const chunk of sceneryChunks) chunk.mesh.visible = Math.abs(chunk.x - frame.actors[0]) < 140;
+  sun.position.set(frame.actors[0] - 30, 65, 35); sun.target.position.set(frame.actors[0], 0, 0);
+  fx.restore(frame.effects);
+  if (faceMood !== frame.mood) drawFace(frame.mood);
+  replayTexts.forEach((sprite, i) => {
+    const text = frame.texts[i]; sprite.visible = !!text;
+    if (!text) return;
+    sprite.position.fromArray(text.position); sprite.material.opacity = text.opacity;
+    if (sprite.material.map !== text.map) { sprite.material.map = text.map; sprite.material.needsUpdate = true; }
+  });
+  if (frame.sound.serial !== replaySound) {
+    replaySound = frame.sound.serial;
+    if (frame.sound.frequency) sound(frame.sound.frequency, frame.sound.duration);
+  }
+  $('zone').textContent = frame.distance < 240 ? '01 / THE NEIGHBORHOOD' : frame.distance < 650 ? '02 / DOWNTOWN DETOUR' : '03 / THE WEIRD SKY';
+  $('chaos').textContent = frame.score.toLocaleString(); $('distance').textContent = String(Math.floor(frame.distance));
+  $('toast').textContent = frame.word; $('toast').style.opacity = frame.word ? '1' : '0';
+  $('replayTime').textContent = `${Math.min(replayClock - highlight[0].time, highlight.at(-1)!.time - highlight[0].time).toFixed(1)}s`;
+  updateContactShadow(frame.actors[0], frame.actors[1], frame.actors[2]);
+  renderer.render(scene, camera);
+  drawClip(frame);
+  publishQA();
+  if (replayClock >= highlight.at(-1)!.time) stopReplay();
+}
+function saveDisaster() {
+  if (!hasPhoto) return;
+  const card = document.createElement('canvas'); card.width = 960; card.height = 720;
+  const g = card.getContext('2d')!;
+  g.fillStyle = '#fffbee'; g.fillRect(0, 0, 960, 720);
+  g.fillStyle = '#243f3b'; g.font = '900 42px sans-serif'; g.fillText('FRIEND CANNON.', 36, 63);
+  g.font = 'bold 17px sans-serif'; g.fillText('A VERY BAD GOOD IDEA', 36, 95);
+  g.drawImage(worstCanvas, 0, 120, 960, 540);
+  g.fillStyle = 'rgba(28,59,49,.92)'; g.fillRect(0, 552, 960, 108);
+  g.fillStyle = '#fffbee'; g.font = 'bold 21px sans-serif'; g.fillText('WORST HIT · ' + worstHitLabel, 28, 591, 902);
+  g.fillStyle = '#f4ce68'; g.font = '900 32px sans-serif';
+  g.fillText(`${chaos.toLocaleString()} CHAOS  /  STREAK ×${maxStreak}  /  ${Math.floor(distance)}m`, 28, 635);
+  g.fillStyle = '#dc5839'; g.font = 'bold 21px sans-serif'; g.fillText('Your friend is fine. Your insurance is not.', 28, 698);
+  card.toBlob(blob => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob), link = document.createElement('a');
+    link.href = url; link.download = `friend-cannon-disaster-${chaos}.png`; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }, 'image/png');
+}
+let clipRecorder: MediaRecorder | null = null;
+let clipStream: MediaStream | null = null;
+let clipAudio: MediaStreamAudioDestinationNode | null = null;
+let discardClip = false;
+const clipCanvas = document.createElement('canvas');
+clipCanvas.width = 960; clipCanvas.height = 540;
+const clipContext = clipCanvas.getContext('2d')!;
+const clipType = typeof MediaRecorder !== 'undefined'
+  ? ['video/webm;codecs=vp8,opus', 'video/webm;codecs=vp8', 'video/webm'].find(t => MediaRecorder.isTypeSupported(t)) : undefined;
+function drawClip(frame: ReplayFrame) {
+  if (!clipRecorder) return;
+  const g = clipContext, source = renderer.domElement;
+  g.fillStyle = '#cce4df'; g.fillRect(0, 0, 960, 540);
+  const scale = Math.min(960 / source.width, 540 / source.height);
+  g.drawImage(source, (960 - source.width * scale) / 2, 0, source.width * scale, source.height * scale);
+  g.fillStyle = '#fffbeef0'; g.fillRect(18, 16, 235, 55); g.fillRect(720, 16, 222, 55);
+  g.fillStyle = '#dc5839'; g.font = '900 25px sans-serif'; g.fillText('FRIEND CANNON.', 29, 51);
+  g.font = '900 23px sans-serif'; g.fillText(frame.score.toLocaleString() + ' CHAOS', 733, 51);
+  if (frame.word) {
+    g.font = '900 29px sans-serif'; g.textAlign = 'center'; g.lineJoin = 'round'; g.lineWidth = 6;
+    g.strokeStyle = '#243f3b'; g.strokeText(frame.word, 480, 115, 850);
+    g.fillStyle = '#fffbee'; g.fillText(frame.word, 480, 115, 850); g.textAlign = 'left';
+  }
+  g.fillStyle = '#243f3be6'; g.fillRect(18, 496, 924, 29);
+  g.fillStyle = '#fffbee'; g.font = 'bold 15px sans-serif'; g.fillText('WORST HIT · ' + worstHitLabel, 29, 516, 900);
+}
+function saveClip() {
+  if (!clipType || highlight.length < 2 || clipRecorder) return;
+  const stream = clipCanvas.captureStream(30);
+  clipStream = stream;
+  if (audioCtx && audioBus && !muted) {
+    clipAudio = audioCtx.createMediaStreamDestination(); audioBus.connect(clipAudio);
+    for (const track of clipAudio.stream.getAudioTracks()) stream.addTrack(track);
+  }
+  const chunks: Blob[] = [];
+  discardClip = false;
+  try {
+    clipRecorder = new MediaRecorder(stream, { mimeType: clipType, videoBitsPerSecond: 2_400_000 });
+  } catch {
+    finishClip(true);
+    $('verdict').textContent = 'Clip export unavailable here. Your disaster card is ready.';
+    return;
+  }
+  clipRecorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+  clipRecorder.onstop = () => {
+    if (!discardClip && chunks.length) {
+      const url = URL.createObjectURL(new Blob(chunks, { type: clipType }));
+      const link = document.createElement('a'); link.href = url; link.download = `friend-cannon-worst-${chaos}.webm`; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+    clipStream?.getTracks().forEach(t => t.stop()); clipStream = null;
+    if (audioBus && clipAudio) audioBus.disconnect(clipAudio);
+    clipAudio = null; clipRecorder = null;
+    $('closeReplay').innerHTML = 'Back to report <kbd>ESC</kbd>';
+  };
+  playReplay();
+  tickReplay(0);
+  clipRecorder.start(250);
+  $('closeReplay').textContent = 'Cancel export';
+}
+function finishClip(cancelled: boolean) {
+  discardClip = cancelled;
+  if (clipRecorder && clipRecorder.state !== 'inactive') clipRecorder.stop();
+  else if (!clipRecorder) {
+    clipStream?.getTracks().forEach(t => t.stop()); clipStream = null;
+    if (audioBus && clipAudio) audioBus.disconnect(clipAudio);
+    clipAudio = null;
+  }
+}
+
+function recordValue(key: string) {
+  try { const value = Number(localStorage.getItem(key)); return Number.isFinite(value) ? Math.max(0, value) : 0; } catch { return 0; }
+}
 function finish() {
   if (state !== "fly") return;
   state = "end";
-  let best = 0;
+  document.body.dataset.state = "end";
+  keys.clear();
+  const previousBest = recordValue("friend-cannon-chaos");
+  const bestChaos = Math.max(previousBest, chaos);
+  const bestStreak = Math.max(recordValue("friend-cannon-streak"), maxStreak);
   try {
-    best = Math.max(
-      Number(localStorage.getItem("friend-cannon-best") || 0),
-      Math.floor(distance),
-    );
-    localStorage.setItem("friend-cannon-best", String(best));
+    localStorage.setItem("friend-cannon-chaos", String(bestChaos));
+    localStorage.setItem("friend-cannon-streak", String(bestStreak));
+    localStorage.setItem("friend-cannon-best", String(Math.max(recordValue("friend-cannon-best"), Math.floor(distance))));
   } catch {}
   $("end").style.display = "grid";
-  $("verdict").textContent =
-    distance > 500
-      ? "A local legend. A citywide insurance problem."
-      : "Gravity called. Your friend finally answered.";
-  $("results").innerHTML = [
-    [`${Math.floor(distance)} m`, "distance"],
-    [chaos.toLocaleString(), "chaos score"],
-    [`×${maxStreak}`, "best chaos streak"],
-    [worstHitLabel, "worst hit"],
-    [`${Math.round(maxHeight)} m`, "max altitude"],
-    [`${Math.round(maxSpeed * 3.6)}`, "top speed · km/h"],
-    [`${carHits} / ${glassHits}`, "cars / glass"],
-    [`${hits} / ${explosions}`, "bounces / booms"],
-    [`${5 - farts}`, "farts deployed"],
-    [`${special}`, "special hits"],
-  ]
-    .map(([v, l]) => `<div><strong>${v}</strong><span>${l}</span></div>`)
-    .join("");
-  $("best").textContent = `PERSONAL BEST · ${best} m`;
+  $("reportEyebrow").textContent = chaos > previousBest ? "NEW PERSONAL DISASTER / FRIEND INTACT" : "FLIGHT REPORT / FRIEND INTACT";
+  $("reportTitle").textContent = maxStreak >= 6 ? "TOTAL DISASTER!" : hits >= 3 ? "BEAUTIFUL MESS." : "BRAVE. VERY BRAVE.";
+  $("verdict").textContent = `${hits} prop hits. ${headbutts} headbutts. ${saves} ridiculous saves.`;
+  $("results").innerHTML = [[chaos.toLocaleString(), "chaos score"], [`×${maxStreak}`, "best streak"], [`${Math.floor(distance)}m`, "distance"]]
+    .map(([v, l]) => `<div><strong>${v}</strong><span>${l}</span></div>`).join("");
+  $("worstLabel").textContent = worstHitSpeed > 0 ? worstHitLabel : "Soft landing. Suspicious.";
+  if (!hasPhoto) captureWorstPhoto();
+  ($("worstPhoto") as HTMLImageElement).src = worstCanvas.toDataURL("image/jpeg", 0.85);
+  $("challenge").textContent = saves === 0 ? "NEXT BAD IDEA: dive low, then press F for a FART SAVE." : maxStreak < 8 ? `ONE MORE? Chain ×${maxStreak + 1} before the streak runs out.` : `ONE MORE? Beat ${Math.ceil((bestChaos + 1) / 1000) * 1000} chaos. Headbutts pay extra.`;
+  $("best").textContent = `PERSONAL BEST · ${bestChaos.toLocaleString()} CHAOS · STREAK ×${bestStreak}`;
+  const duration = highlight.length > 1 ? highlight.at(-1)!.time - highlight[0].time : 0;
+  ($("replay") as HTMLButtonElement).disabled = duration < 0.5;
+  $("replay").textContent = `▶ Watch worst ${Math.round(duration)}s`;
+  $("retry").focus({ preventScroll: true });
 }
 function reset() {
+  finishClip(true);
   state = "aim";
   document.body.dataset.state = "aim";
   runNumber++;
@@ -1042,6 +1267,11 @@ function reset() {
   targetProp = null;
   propChain = 0; saves = 0; headbutts = 0; boostsUsed = 0;
   chainWords.length = 0;
+  history.length = 0; highlight = []; flightClock = 0; nextFrameAt = 0; highlightUntil = 0;
+  hasPhoto = false; photoDelay = -1; frameTimes.length = 0;
+  replayTexts.forEach(t => t.visible = false);
+  lastSound = { serial: 0, frequency: 0, duration: 0 };
+  $("recordHint").textContent = `PERSONAL DISASTER · ${recordValue("friend-cannon-chaos").toLocaleString()} CHAOS`;
   farts = 5;
   chaos = 0;
   maxHeight = 0;
@@ -1069,9 +1299,9 @@ function reset() {
   squashAmt = 1;
   trembleT = 0;
   worstHitSpeed = 0;
+  worstSeverity = 0;
   worstHitLabel = "—";
   impactAge = 0;
-  pendingHits.clear();
   pendingGround = null;
   eventLog.length = 0;
   maxStreak = 0;
@@ -1108,12 +1338,26 @@ function reset() {
   dots.forEach((d) => (d.visible = true));
   updateFuel();
   updateAim();
-  camera.position.set(17, 12, 27);
-  look.set(5, 3, 0);
+  camera.position.set(innerWidth < 761 ? 10 : 13, 9, innerWidth < 761 ? 22 : 23);
+  look.set(innerWidth < 761 ? 1 : 4, 3, 0);
+  sun.position.set(-30, 65, 35); sun.target.position.set(0, 0, 0);
+  world.accumulator = 0;
+  for (const p of parts) {
+    p.body.force.setZero(); p.body.torque.setZero(); p.body.previousPosition.copy(p.body.position);
+    p.body.interpolatedPosition.copy(p.body.position); p.body.aabbNeedsUpdate = true;
+  }
 }
 $("fire").onclick = launch;
-$("retry").onclick = reset;
-$("reset").onclick = reset;
+$("retry").onclick = () => { reset(); launch(); };
+$("replay").onclick = playReplay;
+$("closeReplay").onclick = () => stopReplay(true);
+$("reaim").onclick = reset;
+$("reaimEnd").onclick = reset;
+$("saveClip").onclick = saveClip;
+($("saveClip") as HTMLButtonElement).disabled = !clipType;
+$("saveClip").title = clipType ? "Download the replay as a WebM video" : "Video export unavailable in this browser; save a card instead";
+$("savePhoto").onclick = saveDisaster;
+$("reset").onclick = () => { reset(); launch(); };
 $("boostTouch").onclick = boost;
 for (const [id, code] of [["liftTouch", "KeyQ"], ["flailTouch", "KeyE"]]) {
   const button = $(id);
@@ -1136,13 +1380,18 @@ $("sound").onclick = () => {
 ($("power") as HTMLInputElement).oninput = (e) =>
   (power = Number((e.target as HTMLInputElement).value));
 window.addEventListener("keydown", (e) => {
+  if (e.code === "Space" && e.target instanceof HTMLButtonElement && !["fire", "retry"].includes(e.target.id)) return;
   if (["Space", "ArrowUp", "ArrowDown"].includes(e.code)) e.preventDefault();
   keys.add(e.code);
   if (e.repeat) return;
-  if (e.code === "Space") launch();
+  if (e.code === "Escape") {
+    if (state === "replay") stopReplay(true);
+    else if (state === "fly") reset();
+  }
+  if (e.code === "Space") { if (state === "end") reset(); launch(); }
   if (e.code === "KeyF" || e.code === "ShiftLeft" || e.code === "ShiftRight")
     boost();
-  if (e.code === "KeyR") reset();
+  if (e.code === "KeyR") { const retry = state !== "aim"; reset(); if (retry) launch(); }
 });
 window.addEventListener("keyup", (e) => keys.delete(e.code));
 window.addEventListener("blur", () => keys.clear());
@@ -1182,6 +1431,7 @@ const sampleFaces = [12, 47, 13, 49, 14].map((id, index) => ({
   url: `https://i.pravatar.cc/256?img=${id}`,
   source: fallbackFace(index) as HTMLCanvasElement | HTMLImageElement,
   loaded: false,
+  requested: false,
 }));
 function markFace(selection: string, status: string) {
   selectedFace = selection;
@@ -1220,10 +1470,14 @@ $("face-picker")
           `Sample ${Number(choice) + 1}${sample.loaded ? "" : " · illustrated"}`,
         );
         applyFace(sample.source);
+        loadSample(Number(choice));
       }
     };
   });
-sampleFaces.forEach((sample, index) => {
+function loadSample(index: number) {
+  const sample = sampleFaces[index];
+  if (sample.requested) return;
+  sample.requested = true;
   const image = new Image();
   image.crossOrigin = "anonymous";
   image.referrerPolicy = "no-referrer";
@@ -1244,7 +1498,7 @@ sampleFaces.forEach((sample, index) => {
     /* Keep the immediately available canvas portrait. */
   };
   image.src = sample.url;
-});
+}
 $("face").onclick = () => ($("file") as HTMLInputElement).click();
 ($("file") as HTMLInputElement).onchange = (e) => {
   const input = e.target as HTMLInputElement;
@@ -1269,14 +1523,30 @@ $("face").onclick = () => ($("file") as HTMLInputElement).click();
   img.src = url;
   input.value = "";
 };
+// Cannon clears forces after every substep, so controls belong here, not in RAF.
+world.addEventListener("preStep", () => {
+  if (state !== "fly") return;
+  const spin = (keys.has("KeyQ") ? 1 : 0) - (keys.has("KeyE") ? 1 : 0);
+  torso.body.torque.z += spin * 32;
+  for (const p of parts) {
+    const b = p.body;
+    b.force.z += -b.position.z * 18 - b.velocity.z * 9;
+    b.force.y += b.mass * (spin > 0 ? 10 : spin < 0 ? -10 : 0);
+    b.force.x += b.mass * (spin > 0 ? -4 : spin < 0 ? 7 : 0);
+    if (b.position.y > 34) b.force.y -= (b.position.y - 34) * b.mass * 4;
+    if (b.velocity.x > 43) b.force.x -= (b.velocity.x - 43) * b.mass * 5;
+    if (b.velocity.x < 9 && b.position.y > 2) b.force.x += (9 - b.velocity.x) * b.mass * 3;
+    b.angularVelocity.z = THREE.MathUtils.clamp(b.angularVelocity.z, -12, 12);
+  }
+});
 function updateFlightUI() {
   if (state !== "fly") return;
   const remaining = Math.max(0, chaosMultUntil - elapsed);
   $("streakFill").style.transform = `scaleX(${remaining / 3.4})`;
   $("runTimer").textContent = `${Math.max(0, Math.ceil(40 - elapsed))}s`;
   if (remaining === 0) {
-    $("streakHud").textContent = `BEST STREAK ×${maxStreak}`;
-    $("chainFeed").textContent = "Next prop starts a fresh disaster";
+    $("streakHud").textContent = maxStreak ? `BEST STREAK ×${maxStreak}` : "MAKE A MESS";
+    $("chainFeed").textContent = maxStreak ? "Next prop starts a fresh disaster" : "Hit props. Chain bonks. Get ridiculous.";
   }
   const up = keys.has("KeyQ"), down = keys.has("KeyE");
   $("liftTouch").classList.toggle("held", up);
@@ -1295,6 +1565,7 @@ const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 let frameMs = 16.7, slowTime = 0, renderScale = Math.min(devicePixelRatio, 1.5);
 const frameTimes: number[] = [];
 const qaEnabled = new URLSearchParams(location.search).has("qa");
+const labelProjection = new THREE.Vector3();
 const cameraTarget = new THREE.Vector3(), lookTarget = new THREE.Vector3(), rollAxis = new THREE.Vector3(0, 0, 1);
 const look = new THREE.Vector3(5, 3, 0),
   clock = new THREE.Clock();
@@ -1306,11 +1577,15 @@ function tick() {
   frameMs = THREE.MathUtils.damp(frameMs, Math.min(rawDt, 0.1) * 1000, 2, dt);
   if (state === "fly" && rawDt < 0.1) { frameTimes.push(rawDt * 1000); if (frameTimes.length > 600) frameTimes.shift(); }
   if (frameMs > 29) slowTime += dt; else slowTime = Math.max(0, slowTime - dt);
-  if (slowTime > 2 && renderScale > 0.8) {
-    renderScale = Math.max(0.8, renderScale - 0.25);
+  if (slowTime > 2 && renderScale > 0.65) {
+    renderScale = Math.max(0.65, renderScale - 0.25);
+    if (renderScale < 0.8) renderer.shadowMap.enabled = false;
     renderer.setPixelRatio(renderScale);
     slowTime = 0;
   }
+  if (document.hidden) return;
+  if (state === "replay") { tickReplay(dt); return; }
+  if (state === "fly") flightClock += dt;
   recoil = THREE.MathUtils.damp(recoil, 0, 10, dt);
   cannon.position.x = -recoil;
   if (state === "aim") {
@@ -1345,22 +1620,12 @@ function tick() {
     } else {
       elapsed += dt;
       const spin = (keys.has("KeyQ") ? 1 : 0) - (keys.has("KeyE") ? 1 : 0);
-      torso.body.torque.z += spin * 32;
       boostAngle = THREE.MathUtils.damp(boostAngle, spin, 9, dt);
       const b = torso.body;
-      for (let i = 0; i < parts.length; i++) {
-        const p = parts[i];
-        beforeStep[i].copy(p.body.position);
-        p.body.force.z = -p.body.position.z * 18 - p.body.velocity.z * 9;
-        p.body.force.y += p.body.mass * (spin > 0 ? 10 : spin < 0 ? -10 : 0);
-        p.body.force.x += p.body.mass * (spin > 0 ? -4 : spin < 0 ? 7 : 0);
-        if (p.body.position.y > 34) p.body.force.y -= (p.body.position.y - 34) * p.body.mass * 4;
-        if (p.body.velocity.x > 43) p.body.force.x -= (p.body.velocity.x - 43) * p.body.mass * 5;
-        p.body.angularVelocity.z = THREE.MathUtils.clamp(p.body.angularVelocity.z, -12, 12);
-      }
+      for (let i = 0; i < parts.length; i++) beforeStep[i].copy(parts[i].body.position);
       world.step(1 / 60, dt, 3);
-      resolveContacts();
       checkProps();
+      resolveContacts();
       distance = Math.max(distance, b.position.x - 3);
       maxHeight = Math.max(maxHeight, b.position.y);
       maxSpeed = Math.max(maxSpeed, b.velocity.length());
@@ -1425,6 +1690,7 @@ function tick() {
     const t = floatTexts[i];
     t.life -= dt;
     t.mesh.position.addScaledVector(t.v, dt);
+    if (t.followHead) t.mesh.position.y = head.body.position.y + 2.1 + (0.85 - t.life) * 0.5;
     const mat = t.mesh.material as THREE.SpriteMaterial;
     mat.opacity = Math.max(0, t.life / 0.85);
     if (t.life <= 0) {
@@ -1438,6 +1704,15 @@ function tick() {
   }
   shake = Math.max(0, shake - dt * 1.5);
   camera.lookAt(look);
+  camera.updateMatrixWorld();
+  for (const text of floatTexts) {
+    labelProjection.copy(text.mesh.position).project(camera);
+    const limit = innerWidth < 761 ? 0.42 : 0.74;
+    if (Math.abs(labelProjection.x) > limit) {
+      labelProjection.x = THREE.MathUtils.clamp(labelProjection.x, -limit, limit);
+      text.mesh.position.copy(labelProjection.unproject(camera));
+    }
+  }
   if (shake && !reducedMotion) {
     camera.position.x += (Math.random() - 0.5) * shake;
     camera.position.y += (Math.random() - 0.5) * shake;
@@ -1454,7 +1729,15 @@ function tick() {
         : "03 / THE WEIRD SKY";
   $("toast").style.opacity = performance.now() < toastUntil ? "1" : "0";
   updateFlightUI();
+  updateContactShadow(torso.body.position.x, torso.body.position.y, torso.body.position.z);
   renderer.render(scene, camera);
+  if (state === "fly") {
+    rememberFrame();
+    if (photoDelay >= 0) { photoDelay -= dt; if (photoDelay <= 0) captureWorstPhoto(); }
+  }
+  publishQA();
+}
+function publishQA() {
   if (qaEnabled) {
     (window as unknown as { __cannon: unknown }).__cannon = {
       state, elapsed, distance, chaos, farts, maxStreak, worstHitLabel, faceMood, hitStop,
@@ -1462,6 +1745,8 @@ function tick() {
       velocity: { x: torso.body.velocity.x, y: torso.body.velocity.y },
       events: eventLog, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles,
       geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures,
+      clipExporting: !!clipRecorder, replayFrames: highlight.length, replayDuration: highlight.length > 1 ? highlight.at(-1)!.time - highlight[0].time : 0, hasPhoto,
+      controls: { q: keys.has("KeyQ"), e: keys.has("KeyE"), boostAngle },
       saves, headbutts, boostsUsed, particles: fx.count, frameMs, renderScale, frameTimes, target: targetProp ? { type: targetProp.type, x: targetProp.x, y: targetProp.body.position.y } : null,
     };
   }

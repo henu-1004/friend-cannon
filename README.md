@@ -1,37 +1,47 @@
 # Friend Cannon
 
-A playable slapstick physics toy built with Vite, TypeScript, Three.js, and cannon-es. Launch a very brave friend through a miniature neighborhood, downtown, and a surreal sky district. No backend; face photos stay in your browser.
-
-## Run
+Shove a friend into a cannon. Aim for trouble. Save them just to do it again.
+A single-player slapstick physics game built with Vite, TypeScript, Three.js, and cannon-es. No account or backend.
 
 ```sh
 npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite. `npm run build` type-checks and produces `dist/`; `npm run preview` serves the production build.
+Open the URL printed by Vite. `npm run build` type-checks and produces `dist/`; `npm run preview` serves that build.
 
-## Controls
-
-| Key | Action |
+| Control | Action |
 | --- | --- |
-| A / D | Raise / lower cannon angle |
+| A / D | Raise / lower launch angle |
 | W / S | Increase / decrease power |
-| Space | Fire |
-| F / Shift | Fart booster (five per flight) |
-| Q / E | Flail counterclockwise / clockwise and steer boost upward / forward |
-| R | Instantly retry, including mid-flight |
+| Space | Launch; launch again from the report |
+| Hold Q | Flail up: lift and brake; aim the next boost upward |
+| Hold E | Dive: down and forward; aim the next boost forward |
+| F / Shift | Fart boost. On a low descent, reverses the fall for a FART SAVE |
+| R | Immediately launch another run with the same aim |
+| Escape | Return to aiming; exit replay / cancel video export |
 
-Sliders and launch, boost, flail, and retry buttons also support pointer/touch play. The music-note button toggles synthesized sound effects. The optional circular face picker starts on **None**, keeping the default cartoon face. Choose one of five public Pravatar CDN samples to apply an oval crop immediately, or select None to restore the cartoon. If a sample cannot load (including CORS/network failures), its built-in illustrated portrait stays available. Samples are optional and never block play. **Upload your own photo** also accepts a local image; local photos are never uploaded. Public samples are fetched from `https://i.pravatar.cc/256?img=N`.
+Sliders and buttons support pointer/touch play. **Hold** the two flail buttons to steer. **Change aim** returns to setup; Retry immediately launches again. The music-note button mutes sound.
 
-## Make a mess
+Hit props within 3.4 seconds to build a **CHAOS STREAK**, up to ×8. Headbutts pay extra. Three prop hits replenish one puff, up to five. Ordinary boosts give a small score bonus; only actual rescue boosts extend the streak. Ground impacts, props, and soft balloons have different reaction strengths.
 
-Trampolines, springs, cars, fans, explosive barrels, glass, signs, and balloons turn impacts into new launches. Boost on descent to reach another prop. Q/E applies actual torque to the jointed character; boosts add forward and upward thrust, with direction influenced by flailing. The shallow course gently centers lateral drift to keep props within reach.
+The course combines ground props with a small pool of air targets. The next air target is positioned ahead using a flight prediction, then remains fixed so steering can hit or miss it. Targets and callouts vary between attempts. The target card shows its direction and distance. A run ends after settling, reaching the end of the course, or 40 seconds of active simulation.
 
-The six-body ragdoll has cone-twist joints, a large head, chubby torso, and short floppy limbs. The follow camera lags, pulls back at speed, looks down during flight, and shakes on impact. Distance records forward progress; chaos rewards props, bounce chains, and boosts. The flight report tracks height, speed, cars, glass, explosions, special hits, and fuel usage. Personal best distance persists locally.
+The report remembers your best chaos score and streak locally. It saves the strongest impact as a **5–8 second replay** when enough footage exists (short flights can be shorter). Replay includes poses, expressions, props, effects, and sound. **Save card** downloads a PNG; **Save clip** replays and downloads a WebM video with sound. Video export requires MediaRecorder/WebM support and can be cancelled. No media is posted anywhere.
 
-Flights end after settling, reaching the end of the 1.25 km course, or 65 seconds. R resets immediately. Physics uses a fixed 60 Hz step with capped catch-up to recover from slow frames.
+The optional face picker starts with the cartoon. Each public sample loads from Pravatar **only when selected**, with a built-in illustrated fallback. Uploaded images stay in your browser. Selecting None restores the cartoon. Game fonts are bundled locally with their OFL licenses, so the default game needs no external requests.
 
-## Validation
+Rendering adapts to slow frames by lowering resolution and then disabling detailed shadows. A simple contact shadow remains. Static scenery is batched and culled; bubbles/puffs share an 80-particle instanced pool. Physics and flail forces run at a fixed 60 Hz. Hidden tabs pause; losing focus clears held keys. WebGL is required.
 
-`npm run build` passes. Browser smoke checks exercise launch, distance progression, collisions and chaos scoring, boost fuel, flail input, and retry. WebGL is required. The production bundle includes both rendering and physics engines; Vite may print a non-blocking bundle-size advisory.
+## Browser validation
+
+```sh
+npm run build
+npm run test:browser
+```
+
+The Playwright check starts its own production preview on a free local port and saves evidence under `artifacts/astra/`. It uses an installed Chrome/Chromium if available, or Playwright's bundled browser (`npx playwright install chromium`). Set `CHROME_PATH` to override the executable.
+
+It covers a complete flight, first impact, streaks, low-altitude save, boost cooldown, Q/E steering, low/high launch extremes, instant retry, re-aim, record persistence, worst-hit replay, PNG/WebM export, offline startup, local photo loading, and mobile controls. `?qa` exposes read-only snapshots for the harness; it adds no physics shortcuts.
+
+See `artifacts/astra-vertical-slice.md` for the pass report, measurements, and remaining risks.
